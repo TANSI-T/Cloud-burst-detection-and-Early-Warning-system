@@ -1,0 +1,7 @@
+Flask
+Flask-Cors
+Flask-SocketIO
+mysql-connector-python
+pandas
+scikit-learn
+matplotlib

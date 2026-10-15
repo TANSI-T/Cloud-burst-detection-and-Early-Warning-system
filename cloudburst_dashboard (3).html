@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CloudBurst Detection System</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root{--bg:#020b18;--panel:rgba(5,25,50,0.92);--border:rgba(0,200,255,0.15);--accent:#00c8ff;--accent2:#00ff9d;--warn:#ff9d00;--danger:#ff2d55;--text:#cce8ff;--dim:rgba(0,200,255,0.4);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);font-family:'Exo 2',sans-serif;color:var(--text);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse at 20% 20%,rgba(0,100,200,0.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 80%,rgba(0,200,150,0.08) 0%,transparent 60%);}
+.rain-container{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden;}
+.raindrop{position:absolute;width:1px;background:linear-gradient(to bottom,transparent,rgba(0,200,255,0.25));animation:fall linear infinite;top:-100px;}
+@keyframes fall{to{transform:translateY(110vh);}}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(2,11,24,0.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 16px;box-shadow:0 6px 20px rgba(0,0,0,0.25);}
+.nav-btn{padding:8px 16px;border-radius:8px;font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;border:1px solid rgba(0,200,255,0.2);background:transparent;color:rgba(200,230,255,0.5);transition:all 0.3s;text-transform:uppercase;min-width:118px;}
+.nav-btn.active{background:rgba(0,200,255,0.15);border-color:var(--accent);color:var(--accent);box-shadow:0 0 12px rgba(0,200,255,0.25);}
+.nav-btn:hover{background:rgba(0,200,255,0.1);color:var(--text);}
+.nav-title{font-family:'Orbitron',monospace;font-size:12px;font-weight:900;background:linear-gradient(135deg,#00c8ff,#00ff9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-right:20px;}
+.nav-status{margin-left:6px;padding:7px 10px;border-radius:7px;border:1px solid rgba(0,200,255,0.2);background:rgba(255,255,255,0.02);font-family:'Orbitron',monospace;font-size:9px;letter-spacing:1px;color:#ff9cae;}
+
+/* PAGES */
+.page{display:none;padding-top:60px;}
+.page.active{display:block;}
+.wrapper{position:relative;z-index:1;max-width:1500px;margin:0 auto;padding:18px 16px;}
+
+/* ═══════════════════════════════════════
+   PAGE 1 — HOME (unchanged)
+═══════════════════════════════════════ */
+header{text-align:center;margin-bottom:18px;}
+.header-badge{display:inline-block;background:rgba(0,200,255,0.08);border:1px solid var(--dim);border-radius:50px;padding:5px 18px;font-size:10px;letter-spacing:3px;text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
+h1{font-family:'Orbitron',monospace;font-size:clamp(16px,3.5vw,34px);font-weight:900;background:linear-gradient(135deg,#00c8ff,#00ff9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:2px;}
+.subtitle{font-size:11px;color:rgba(200,230,255,0.4);margin-top:5px;letter-spacing:1px;}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:blink 2s infinite;margin-right:5px;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.gps-bar{display:flex;align-items:center;justify-content:center;gap:20px;padding:10px 20px;background:var(--panel);border:1px solid var(--border);border-radius:12px;margin-bottom:14px;flex-wrap:wrap;backdrop-filter:blur(20px);}
+.gps-item{display:flex;align-items:center;gap:8px;font-size:11px;}
+.gps-label{color:rgba(200,230,255,0.4);letter-spacing:1px;font-size:10px;}
+.gps-val{font-family:'Orbitron',monospace;font-size:11px;color:var(--accent2);}
+.gps-divider{width:1px;height:20px;background:var(--border);}
+.bat-outer{width:40px;height:14px;border:1px solid rgba(0,255,157,0.4);border-radius:3px;position:relative;padding:2px;}
+.bat-outer::after{content:'';position:absolute;right:-5px;top:50%;transform:translateY(-50%);width:3px;height:7px;background:rgba(0,255,157,0.4);border-radius:0 2px 2px 0;}
+.bat-inner{height:100%;border-radius:2px;background:var(--accent2);transition:width 1s;}
+.solar-dot{width:8px;height:8px;border-radius:50%;background:#ffcc00;box-shadow:0 0 6px #ffcc00;animation:blink 1.5s infinite;}
+.sim-controls{display:flex;align-items:center;justify-content:flex-start;gap:8px;margin-bottom:12px;flex-wrap:wrap;background:rgba(0,200,255,0.03);border:1px solid rgba(0,200,255,0.12);border-radius:10px;padding:9px;}
+.sim-btn{padding:8px 16px;border-radius:7px;font-family:'Orbitron',monospace;font-size:10px;letter-spacing:1px;cursor:pointer;border:1px solid;transition:all 0.3s;text-transform:uppercase;}
+.sim-btn-start{background:rgba(0,255,157,0.1);border-color:var(--accent2);color:var(--accent2);}
+.sim-btn-start:hover{background:rgba(0,255,157,0.2);}
+.sim-btn-stop{background:rgba(255,45,85,0.1);border-color:var(--danger);color:var(--danger);}
+.sim-btn-stop:hover{background:rgba(255,45,85,0.2);}
+.sim-btn-manual{background:rgba(0,200,255,0.08);border-color:var(--accent);color:var(--accent);}
+.sim-btn-manual:hover{background:rgba(0,200,255,0.18);}
+.sim-btn-export{background:rgba(255,157,0,0.1);border-color:var(--warn);color:var(--warn);}
+.sim-btn-emergency{background:rgba(255,45,85,0.12);border-color:rgba(255,45,85,0.75);color:#ff7f98;}
+.sim-btn-emergency:hover{background:rgba(255,45,85,0.22);box-shadow:0 0 12px rgba(255,45,85,0.35);}
+.scenario-select{background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.2);border-radius:7px;padding:8px 11px;color:var(--text);font-family:'Exo 2',sans-serif;font-size:12px;outline:none;cursor:pointer;}
+.scenario-select option{background:#020b18;}
+.sim-status{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;color:#00ff9d;padding:8px 12px;background:rgba(0,200,255,0.08);border:1px solid var(--border);border-radius:7px;}
+.relay-live{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:1px;padding:8px 10px;border-radius:7px;background:rgba(255,255,255,0.02);border:1px solid rgba(0,200,255,0.14);color:rgba(200,230,255,0.8);}
+.relay-live.on{color:#00ff9d;border-color:rgba(0,255,157,0.45);background:rgba(0,255,157,0.08);}
+.alert-banner{display:none;padding:11px 18px;border-radius:10px;margin-bottom:12px;font-family:'Orbitron',monospace;font-size:11px;letter-spacing:1px;text-align:center;animation:pulse 1.2s infinite;border:1px solid;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.55}}
+.alert-danger{background:rgba(255,45,85,0.12);border-color:rgba(255,45,85,0.6);color:#ff2d55;}
+.alert-warn{background:rgba(255,157,0,0.1);border-color:rgba(255,157,0,0.5);color:#ff9d00;}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px;}
+.sensor-card{background:var(--panel);border:1px solid var(--border);border-radius:13px;padding:14px 12px;text-align:center;backdrop-filter:blur(20px);position:relative;overflow:hidden;animation:fadeUp 0.6s ease both;}
+.sensor-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0.4;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+.sensor-icon{font-size:20px;margin-bottom:5px;display:block;}
+.sensor-label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(200,230,255,0.4);margin-bottom:4px;}
+.sensor-value{font-family:'Orbitron',monospace;font-size:22px;font-weight:700;color:var(--accent);line-height:1;transition:color 0.5s;}
+.sensor-unit{font-size:9px;color:rgba(200,230,255,0.4);margin-top:2px;}
+.feels-like{font-size:9px;color:rgba(200,230,255,0.35);margin-top:3px;letter-spacing:0.5px;}
+.sparkline{margin-top:7px;}.sparkline canvas{width:100%;height:24px;display:block;}
+.stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px;}
+.stat-card{background:var(--panel);border:1px solid var(--border);border-radius:11px;padding:12px 10px;text-align:center;backdrop-filter:blur(20px);}
+.stat-val{font-family:'Orbitron',monospace;font-size:20px;font-weight:700;color:var(--accent);}
+.stat-label{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(200,230,255,0.35);margin-top:3px;}
+.main-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-bottom:14px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:15px;padding:16px;backdrop-filter:blur(20px);position:relative;overflow:hidden;}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0.4;}
+.panel-title{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);margin-bottom:13px;display:flex;align-items:center;gap:7px;}
+.panel-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.result-box{padding:14px;border-radius:11px;text-align:center;border:1px solid var(--border);background:rgba(0,200,255,0.03);min-height:100px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all 0.5s;margin-bottom:12px;}
+.result-emoji{font-size:26px;margin-bottom:4px;}
+.result-stage-num{font-family:'Orbitron',monospace;font-size:8px;letter-spacing:3px;color:rgba(200,230,255,0.4);margin-bottom:4px;}
+.result-label{font-family:'Orbitron',monospace;font-size:clamp(11px,1.4vw,15px);font-weight:700;transition:color 0.5s;}
+.result-meta{font-size:8px;color:rgba(200,230,255,0.3);margin-top:5px;line-height:1.6;}
+.timer-box{background:rgba(0,200,255,0.04);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;margin-bottom:12px;}
+.timer-label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(200,230,255,0.35);margin-bottom:4px;}
+.timer-val{font-family:'Orbitron',monospace;font-size:18px;color:var(--warn);letter-spacing:2px;}
+.timer-sub{font-size:8px;color:rgba(200,230,255,0.25);margin-top:2px;}
+.speed-wrap{display:flex;align-items:center;gap:7px;margin-top:10px;}
+.speed-wrap label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(200,230,255,0.4);white-space:nowrap;}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(0,200,255,0.2);border-radius:2px;outline:none;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 5px var(--accent);}
+.speed-val{font-family:'Orbitron',monospace;font-size:9px;color:var(--accent);width:26px;}
+.stages-container{display:flex;flex-direction:column;gap:3px;}
+.stage-row{display:flex;align-items:center;gap:5px;padding:3px 5px;border-radius:5px;transition:all 0.4s;border:1px solid transparent;}
+.stage-row.active{background:rgba(0,200,255,0.08);border-color:rgba(0,200,255,0.2);}
+.stage-num{font-family:'Orbitron',monospace;font-size:7px;color:rgba(200,230,255,0.25);width:13px;text-align:right;flex-shrink:0;}
+.stage-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;background:rgba(255,255,255,0.08);transition:all 0.4s;}
+.stage-bar-wrap{flex:1;height:3px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;}
+.stage-bar{height:100%;border-radius:2px;transition:width 1s ease;}
+.stage-name{font-size:8px;color:rgba(200,230,255,0.4);width:105px;flex-shrink:0;transition:color 0.3s;}
+.stage-row.active .stage-name{color:var(--text);font-weight:600;}
+.chart-wrap{width:100%;height:140px;position:relative;}.chart-wrap canvas{width:100% !important;height:140px !important;}
+.history-wrap{height:300px;overflow:hidden;position:relative;}
+.history-inner{display:flex;flex-direction:column;gap:5px;}
+.history-item{display:flex;align-items:center;gap:7px;padding:6px 9px;background:rgba(0,200,255,0.03);border:1px solid rgba(0,200,255,0.07);border-radius:6px;font-size:9px;flex-shrink:0;animation:slideIn 0.3s ease;}
+@keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
+.history-time{font-family:'Orbitron',monospace;font-size:8px;color:rgba(200,230,255,0.3);flex-shrink:0;}
+.history-stage{font-family:'Orbitron',monospace;font-size:8px;flex:1;}
+.no-history{text-align:center;color:rgba(200,230,255,0.2);font-size:11px;padding:20px 0;letter-spacing:1px;}
+.manual-section{display:none;margin-bottom:11px;}
+.manual-section.visible{display:block;}
+.input-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px;}
+.input-group{display:flex;flex-direction:column;gap:4px;}
+.input-group label{font-size:8px;letter-spacing:2px;text-transform:uppercase;color:rgba(200,230,255,0.45);}
+.input-group input{background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.2);border-radius:6px;padding:7px 10px;color:var(--text);font-family:'Orbitron',monospace;font-size:12px;outline:none;transition:border-color 0.3s;width:100%;}
+.input-group input:focus{border-color:var(--accent);background:rgba(0,200,255,0.1);}
+.input-group input::placeholder{color:rgba(200,230,255,0.18);}
+.predict-btn{width:100%;padding:9px;background:linear-gradient(135deg,#00c8ff12,#00ff9d12);border:1px solid var(--accent);border-radius:7px;color:var(--accent);font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;cursor:pointer;transition:all 0.3s;text-transform:uppercase;}
+.predict-btn:hover{box-shadow:0 0 14px rgba(0,200,255,0.3);transform:translateY(-1px);}
+.risk-map{width:100%;height:160px;border-radius:10px;position:relative;overflow:hidden;background:rgba(0,20,40,0.8);border:1px solid var(--border);margin-bottom:0;}
+.risk-map canvas{width:100%;height:100%;}
+.map-legend{display:flex;gap:10px;margin-top:8px;justify-content:center;flex-wrap:wrap;}
+.legend-item{display:flex;align-items:center;gap:4px;font-size:9px;color:rgba(200,230,255,0.5);}
+.legend-dot{width:8px;height:8px;border-radius:50%;}
+
+.relay-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px;border:1px solid rgba(0,200,255,0.16);border-radius:10px;background:linear-gradient(180deg,rgba(0,200,255,0.05),rgba(0,120,190,0.03));}
+.relay-title{font-family:'Orbitron',monospace;font-size:9px;letter-spacing:1.5px;color:var(--accent);margin-right:6px;}
+.relay-btn{padding:7px 10px;border-radius:7px;border:1px solid rgba(0,200,255,0.2);background:transparent;color:rgba(200,230,255,0.7);font-family:'Orbitron',monospace;font-size:9px;cursor:pointer;transition:all 0.2s;}
+.relay-btn.active{background:rgba(0,255,157,0.15);border-color:#00ff9d;color:#00ff9d;box-shadow:0 0 8px rgba(0,255,157,0.25);}
+.relay-btn.alloff{border-color:rgba(255,45,85,0.4);color:#ff9cae;}
+.relay-btn:hover{background:rgba(0,200,255,0.12);}
+.control-section{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px;border:1px solid rgba(0,200,255,0.18);border-radius:10px;background:rgba(0,35,60,0.45);}
+
+/* ═══════════════════════════════════════
+   PAGE 2 — STREET LIGHT WARNING
+═══════════════════════════════════════ */
+.p2-wrapper{max-width:900px;margin:0 auto;padding:30px 20px;}
+.p2-title{text-align:center;font-family:'Orbitron',monospace;font-size:clamp(16px,3vw,28px);font-weight:900;background:linear-gradient(135deg,#00c8ff,#00ff9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;letter-spacing:2px;}
+.p2-subtitle{text-align:center;font-size:11px;color:rgba(200,230,255,0.4);margin-bottom:30px;letter-spacing:1px;}
+
+/* Current big stage display */
+.p2-current{background:var(--panel);border:1px solid var(--border);border-radius:20px;padding:24px;text-align:center;margin-bottom:28px;backdrop-filter:blur(20px);position:relative;overflow:hidden;}
+.p2-current::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:0.5;}
+.p2-current-stage{font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:rgba(200,230,255,0.4);margin-bottom:8px;}
+.p2-current-emoji{font-size:50px;margin-bottom:10px;display:block;}
+.p2-current-name{font-family:'Orbitron',monospace;font-size:clamp(16px,3vw,26px);font-weight:900;transition:color 0.5s;}
+.p2-current-desc{font-size:12px;color:rgba(200,230,255,0.5);margin-top:8px;}
+.ai-model-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px;}
+.ai-cell{background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.12);border-radius:10px;padding:9px;text-align:left;}
+.ai-k{font-size:8px;letter-spacing:1.4px;text-transform:uppercase;color:rgba(200,230,255,0.45);margin-bottom:4px;}
+.ai-v{font-family:'Orbitron',monospace;font-size:10px;color:#9de8ff;word-break:break-word;}
+
+/* 5 Standing Street Lights */
+.five-lights-row{display:flex;align-items:flex-end;justify-content:center;gap:40px;padding:20px 0 0;flex-wrap:wrap;}
+.street-light-wrap{display:flex;flex-direction:column;align-items:center;gap:0;}
+.sl-head{width:70px;background:linear-gradient(180deg,#1a2a3a,#0d1a28);border-radius:12px 12px 6px 6px;border:1.5px solid rgba(100,150,200,0.25);padding:10px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;}
+.sl-head::before{content:'';position:absolute;top:-8px;left:50%;transform:translateX(-50%);width:20px;height:8px;background:linear-gradient(180deg,#1a2a3a,#0d1a28);border-radius:4px 4px 0 0;border:1.5px solid rgba(100,150,200,0.2);border-bottom:none;}
+.sl-bulb{width:44px;height:44px;border-radius:50%;transition:all 0.3s;position:relative;}
+.sl-bulb.off{background:rgba(30,30,40,0.8);border:2px solid rgba(80,80,100,0.3);box-shadow:none;}
+.sl-bulb.on-white{background:radial-gradient(circle at 35% 35%,#ffffff,#aaccff);border:2px solid rgba(255,255,255,0.7);box-shadow:0 0 20px 8px rgba(180,210,255,0.9),0 0 40px 15px rgba(150,180,255,0.5);}
+.sl-bulb.on-yellow{background:radial-gradient(circle at 35% 35%,#ffee44,#ff9900);border:2px solid rgba(255,210,0,0.8);box-shadow:0 0 20px 8px rgba(255,200,0,0.9),0 0 40px 15px rgba(255,140,0,0.5);}
+.sl-bulb.on-red{background:radial-gradient(circle at 35% 35%,#ff6666,#cc0000);border:2px solid rgba(255,80,80,0.8);box-shadow:0 0 20px 8px rgba(255,50,50,0.9),0 0 40px 15px rgba(200,0,0,0.5);}
+.sl-bulb.blink-white{animation:blinkWhite 0.4s infinite;}
+.sl-bulb.blink-yellow{animation:blinkYellow 0.4s infinite;}
+.sl-bulb.blink-red{animation:blinkRed 0.3s infinite;}
+@keyframes blinkWhite{0%,100%{background:radial-gradient(circle at 35% 35%,#ffffff,#aaccff);box-shadow:0 0 20px 8px rgba(180,210,255,0.9),0 0 40px 15px rgba(150,180,255,0.5);}50%{background:rgba(30,30,40,0.8);box-shadow:none;}}
+@keyframes blinkYellow{0%,100%{background:radial-gradient(circle at 35% 35%,#ffee44,#ff9900);box-shadow:0 0 20px 8px rgba(255,200,0,0.9),0 0 40px 15px rgba(255,140,0,0.5);}50%{background:rgba(30,30,40,0.8);box-shadow:none;}}
+@keyframes blinkRed{0%,100%{background:radial-gradient(circle at 35% 35%,#ff6666,#cc0000);box-shadow:0 0 25px 10px rgba(255,50,50,1),0 0 50px 20px rgba(200,0,0,0.7);}50%{background:rgba(30,30,40,0.8);box-shadow:none;}}
+.sl-label{font-family:'Orbitron',monospace;font-size:7px;letter-spacing:1px;color:rgba(200,230,255,0.4);text-align:center;margin-top:2px;transition:color 0.3s;}
+.sl-arm{width:4px;height:30px;background:linear-gradient(180deg,rgba(150,180,220,0.4),rgba(100,130,170,0.3));border-radius:2px;}
+.sl-pole{width:6px;height:120px;background:linear-gradient(180deg,rgba(150,180,220,0.35),rgba(80,110,150,0.2));border-radius:3px;}
+.sl-base{width:22px;height:10px;background:linear-gradient(180deg,rgba(100,130,170,0.4),rgba(60,90,120,0.3));border-radius:3px;margin-top:0;}
+.sl-zone-label{font-family:'Orbitron',monospace;font-size:8px;letter-spacing:1px;color:rgba(200,230,255,0.35);margin-top:6px;text-align:center;}
+.sl-stage-range{font-size:9px;color:rgba(200,230,255,0.25);margin-top:2px;text-align:center;}
+
+/* Stage line */
+.stage-line-wrap{width:100%;overflow-x:auto;padding:10px 0;}
+.stage-line{display:flex;align-items:center;gap:0;min-width:max-content;margin:0 auto;justify-content:center;}
+.stage-pill{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 6px;border-radius:10px;min-width:58px;transition:all 0.4s;border:1px solid transparent;cursor:default;}
+.stage-pill.white-zone{background:rgba(200,220,255,0.06);border-color:rgba(200,220,255,0.1);}
+.stage-pill.yellow-zone{background:rgba(255,200,0,0.06);border-color:rgba(255,200,0,0.1);}
+.stage-pill.red-zone{background:rgba(255,50,50,0.06);border-color:rgba(255,50,50,0.1);}
+.stage-pill.active-white{background:rgba(200,220,255,0.2);border-color:rgba(255,255,255,0.6);box-shadow:0 0 15px rgba(200,220,255,0.4);}
+.stage-pill.active-yellow{background:rgba(255,200,0,0.2);border-color:rgba(255,200,0,0.8);box-shadow:0 0 15px rgba(255,200,0,0.5);}
+.stage-pill.active-red{background:rgba(255,50,50,0.25);border-color:rgba(255,80,80,0.9);box-shadow:0 0 20px rgba(255,50,50,0.6);animation:redGlow 1s infinite;}
+@keyframes redGlow{0%,100%{box-shadow:0 0 15px rgba(255,50,50,0.5);}50%{box-shadow:0 0 30px rgba(255,50,50,0.9);}}
+.stage-pill-num{font-family:'Orbitron',monospace;font-size:9px;font-weight:700;}
+.stage-pill-emoji{font-size:14px;}
+.stage-pill-name{font-size:7px;text-align:center;line-height:1.2;max-width:55px;}
+.connector{width:12px;height:2px;flex-shrink:0;margin-bottom:16px;}
+
+/* Legend */
+.p2-legend{display:flex;justify-content:center;gap:24px;margin-top:16px;flex-wrap:wrap;}
+.p2-legend-item{display:flex;align-items:center;gap:8px;font-size:11px;color:rgba(200,230,255,0.6);}
+.p2-legend-dot{width:14px;height:14px;border-radius:50%;}
+
+/* ═══════════════════════════════════════
+   PAGE 3 — SMS ALERT
+═══════════════════════════════════════ */
+.p3-wrapper{max-width:800px;margin:0 auto;padding:30px 20px;}
+.p3-title{text-align:center;font-family:'Orbitron',monospace;font-size:clamp(16px,3vw,26px);font-weight:900;background:linear-gradient(135deg,#00c8ff,#00ff9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;letter-spacing:2px;}
+.p3-subtitle{text-align:center;font-size:11px;color:rgba(200,230,255,0.4);margin-bottom:24px;letter-spacing:1px;}
+
+/* Phone mockup */
+.phone-wrap{display:flex;justify-content:center;margin-bottom:24px;}
+.phone{width:280px;background:#0a0a1a;border-radius:40px;border:2px solid rgba(100,150,200,0.3);padding:16px;box-shadow:0 20px 60px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.05);}
+.phone-notch{width:80px;height:20px;background:#0a0a1a;border-radius:0 0 14px 14px;margin:0 auto 12px;border:2px solid rgba(100,150,200,0.2);border-top:none;}
+.phone-screen{background:#0d1117;border-radius:20px;padding:16px;min-height:340px;}
+.sms-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,0.06);}
+.sms-avatar{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#00c8ff,#00ff9d);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.sms-from{font-size:12px;font-weight:600;color:#fff;}
+.sms-time-small{font-size:9px;color:rgba(255,255,255,0.3);}
+.sms-bubble-wrap{display:flex;flex-direction:column;gap:8px;}
+.sms-bubble{background:rgba(0,200,255,0.12);border:1px solid rgba(0,200,255,0.2);border-radius:4px 16px 16px 16px;padding:12px 14px;font-size:11px;line-height:1.6;color:#cce8ff;animation:smsPop 0.4s ease;}
+.sms-bubble.danger{background:rgba(255,45,85,0.12);border-color:rgba(255,45,85,0.3);}
+.sms-bubble.warn{background:rgba(255,157,0,0.1);border-color:rgba(255,157,0,0.25);}
+@keyframes smsPop{from{opacity:0;transform:scale(0.95)}to{opacity:1;transform:scale(1)}}
+.sms-line{margin-bottom:3px;}
+.sms-bold{font-weight:700;color:#fff;}
+.sms-highlight{font-family:'Orbitron',monospace;font-size:10px;}
+.phone-home{width:40px;height:5px;background:rgba(255,255,255,0.15);border-radius:3px;margin:12px auto 0;}
+
+/* SMS Log */
+.sms-log{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;backdrop-filter:blur(20px);}
+.sms-log-title{font-family:'Orbitron',monospace;font-size:10px;letter-spacing:2px;color:var(--accent);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.sms-log-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.sms-log-list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;}
+.sms-log-list::-webkit-scrollbar{width:3px;}
+.sms-log-list::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px;}
+.sms-log-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(0,200,255,0.08);background:rgba(0,200,255,0.03);animation:slideIn 0.3s ease;}
+.sms-log-icon{font-size:20px;flex-shrink:0;}
+.sms-log-content{flex:1;}
+.sms-log-stage{font-family:'Orbitron',monospace;font-size:10px;font-weight:700;margin-bottom:2px;}
+.sms-log-msg{font-size:10px;color:rgba(200,230,255,0.5);line-height:1.4;}
+.sms-log-time{font-family:'Orbitron',monospace;font-size:8px;color:rgba(200,230,255,0.3);flex-shrink:0;margin-top:2px;}
+.no-sms{text-align:center;color:rgba(200,230,255,0.2);font-size:12px;padding:24px 0;letter-spacing:1px;}
+
+/* ═══════════════════════════════════════
+   PAGE 4 — SENSOR STATUS
+═══════════════════════════════════════ */
+.p4-wrapper{max-width:1000px;margin:0 auto;padding:30px 20px;}
+.p4-title{text-align:center;font-family:'Orbitron',monospace;font-size:clamp(16px,3vw,26px);font-weight:900;background:linear-gradient(135deg,#00c8ff,#00ff9d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px;letter-spacing:2px;}
+.p4-subtitle{text-align:center;font-size:11px;color:rgba(200,230,255,0.4);margin-bottom:24px;letter-spacing:1px;}
+.sensor-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:20px;}
+.sensor-status-card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;backdrop-filter:blur(20px);position:relative;overflow:hidden;transition:border-color 0.4s;}
+.sensor-status-card.online{border-color:rgba(0,255,157,0.3);}
+.sensor-status-card.offline{border-color:rgba(255,45,85,0.3);}
+.sensor-status-card.warning{border-color:rgba(255,157,0,0.3);}
+.ss-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.ss-name{font-family:'Orbitron',monospace;font-size:13px;font-weight:700;color:var(--text);}
+.ss-badge{padding:4px 10px;border-radius:20px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:1px;}
+.ss-badge.online{background:rgba(0,255,157,0.15);color:#00ff9d;border:1px solid rgba(0,255,157,0.3);}
+.ss-badge.offline{background:rgba(255,45,85,0.15);color:#ff2d55;border:1px solid rgba(255,45,85,0.3);}
+.ss-badge.warning{background:rgba(255,157,0,0.15);color:#ff9d00;border:1px solid rgba(255,157,0,0.3);}
+.ss-icon{font-size:36px;margin-bottom:12px;display:block;}
+.ss-value{font-family:'Orbitron',monospace;font-size:28px;font-weight:700;margin-bottom:4px;transition:color 0.5s;}
+.ss-unit{font-size:11px;color:rgba(200,230,255,0.4);}
+.ss-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px;}
+.ss-meta-item{background:rgba(0,200,255,0.04);border:1px solid rgba(0,200,255,0.08);border-radius:8px;padding:8px;}
+.ss-meta-label{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(200,230,255,0.35);margin-bottom:3px;}
+.ss-meta-val{font-family:'Orbitron',monospace;font-size:12px;color:var(--text);}
+.ss-bar-wrap{height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;margin-top:10px;}
+.ss-bar{height:100%;border-radius:2px;transition:width 1s ease;}
+.ss-signal{display:flex;align-items:flex-end;gap:2px;height:16px;}
+.ss-signal-bar{width:4px;border-radius:1px;background:rgba(0,255,157,0.8);}
+
+/* System health */
+.system-health{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;backdrop-filter:blur(20px);}
+.health-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px;}
+.health-item{text-align:center;padding:14px;background:rgba(0,200,255,0.04);border:1px solid rgba(0,200,255,0.08);border-radius:12px;}
+.health-val{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:var(--accent2);}
+.health-label{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:rgba(200,230,255,0.35);margin-top:4px;}
+
+@media(max-width:900px){
+  .wrapper{padding:14px 12px;}
+  .main-grid{grid-template-columns:1fr 1fr;}
+  .stats-row{grid-template-columns:repeat(3,1fr);}
+  .sensor-grid{grid-template-columns:1fr;}
+  .health-grid{grid-template-columns:repeat(2,1fr);}
+  .gps-bar{justify-content:flex-start;gap:12px;padding:10px 12px;}
+  .gps-divider{display:none;}
+  .gps-item{min-width:calc(50% - 8px);}
+  .sim-controls{justify-content:flex-start;}
+}
+
+@media(max-width:700px){
+  .nav{justify-content:center;overflow-x:visible;white-space:normal;gap:8px;padding:10px 12px;flex-wrap:wrap;}
+  .nav::-webkit-scrollbar{height:3px;}
+  .nav::-webkit-scrollbar-thumb{background:var(--dim);border-radius:2px;}
+  .nav-title{margin-right:8px;font-size:11px;}
+  .nav-btn{padding:8px 12px;font-size:9px;}
+  .page{padding-top:64px;}
+  .wrapper{padding:12px 10px;}
+  .grid-4{grid-template-columns:1fr;gap:10px;}
+  .stats-row{grid-template-columns:1fr 1fr;gap:8px;}
+  .main-grid{grid-template-columns:1fr;gap:10px;}
+  .panel{padding:12px;border-radius:12px;}
+  .p2-wrapper,.p3-wrapper,.p4-wrapper{padding:18px 10px;}
+  .five-lights-row{gap:16px;}
+  .ai-model-grid{grid-template-columns:1fr 1fr;}
+  .sl-head{width:56px;padding:8px 6px;}
+  .sl-bulb{width:34px;height:34px;}
+  .sl-pole{height:90px;}
+  .sim-controls{gap:6px;}
+  .sim-btn{padding:7px 10px;font-size:9px;}
+  .sim-status{font-size:9px;padding:7px 10px;}
+  .relay-live{font-size:8px;padding:7px 8px;}
+  .control-section{gap:6px;padding:9px;}
+  .input-grid{grid-template-columns:1fr;}
+  .result-box{min-height:88px;padding:10px;}
+  .history-wrap{height:220px;}
+  .phone{width:100%;max-width:300px;}
+  .sms-log{padding:14px;}
+  .health-grid{grid-template-columns:1fr 1fr;gap:8px;}
+  #readingsTable{font-size:11px;min-width:620px;}
+}
+
+@media(max-width:480px){
+  body{font-size:13px;}
+  .header-badge{font-size:9px;letter-spacing:2px;}
+  .subtitle{font-size:10px;line-height:1.5;}
+  .gps-item{min-width:100%;}
+  .stats-row{grid-template-columns:1fr;}
+  .health-grid{grid-template-columns:1fr;}
+  .sensor-value{font-size:20px;}
+  .stat-val{font-size:18px;}
+  .panel-title{font-size:8px;letter-spacing:1.5px;}
+  .sim-controls{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;}
+  .sim-controls .sim-status{grid-column:1 / -1;text-align:center;}
+  .control-section{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;}
+  .control-section .relay-title{grid-column:1 / -1;}
+  .ai-model-grid{grid-template-columns:1fr;}
+  .stage-line-wrap{padding-bottom:12px;}
+}
+</style>
+</head>
+<body>
+<div class="rain-container" id="rainContainer"></div>
+<h1>Cloudburst Dashboard</h1>
+
+<div id="historyBox"></div>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-title">⚡ CBS</div>
+  <button class="nav-btn active" onclick="showPage(0)">🏠 Home</button>
+  <button class="nav-btn" onclick="showPage(1)">🧠 AI Model</button>
+  <button class="nav-btn" onclick="showPage(2)">🎛 Control Panel</button>
+  <div class="nav-status" id="esp32NavStatus">ESP32: OFFLINE</div>
+</nav>
+
+<!-- ══ PAGE 1: HOME ══ -->
+<div class="page active" id="page0">
+<div class="wrapper">
+  <header>
+    <div class="header-badge">⚡ IoT + ML Powered System</div>
+    <h1>CLOUDBURST DETECTION SYSTEM</h1>
+    <p class="subtitle"><span class="status-dot"></span>HYPERLOCAL EARLY WARNING — HILLY REGIONS &nbsp;|&nbsp; 15-STAGE CLASSIFICATION</p>
+  </header>
+  <div class="gps-bar">
+    <div class="gps-item"><span>📍</span><div><div class="gps-label">LOCATION</div><div class="gps-val">Shimla Hill Slope, HP</div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><span>🌐</span><div><div class="gps-label">LATITUDE</div><div class="gps-val">31.1048° N</div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><span>🌐</span><div><div class="gps-label">LONGITUDE</div><div class="gps-val">77.1734° E</div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><span>⛰️</span><div><div class="gps-label">ALTITUDE</div><div class="gps-val">2206 m</div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><div style="display:flex;align-items:center;gap:6px;"><span>🔋</span><div><div class="gps-label">BATTERY</div><div style="display:flex;align-items:center;gap:5px;"><div class="bat-outer"><div class="bat-inner" id="batInner" style="width:82%"></div></div><span class="gps-val" id="batPct">82%</span></div></div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><div class="solar-dot"></div><div><div class="gps-label">SOLAR</div><div class="gps-val" style="color:#ffcc00;">CHARGING</div></div></div>
+    <div class="gps-divider"></div>
+    <div class="gps-item"><span>🕐</span><div><div class="gps-label">LOCAL TIME</div><div class="gps-val" id="localTime">--:--:--</div></div></div>
+  </div>
+  <div class="alert-banner" id="alertBanner"></div>
+  <div class="grid-4">
+    <div class="sensor-card" style="animation-delay:0.1s"><span class="sensor-icon">🌧</span><div class="sensor-label">Rainfall</div><div class="sensor-value" id="disp-rainfall">—</div><div class="sensor-unit">mm / hr</div><div class="sparkline"><canvas id="spark-rainfall" width="200" height="24"></canvas></div></div>
+    <div class="sensor-card" style="animation-delay:0.2s"><span class="sensor-icon">💧</span><div class="sensor-label">Humidity</div><div class="sensor-value" id="disp-humidity">—</div><div class="sensor-unit">%</div><div class="sparkline"><canvas id="spark-humidity" width="200" height="24"></canvas></div></div>
+    <div class="sensor-card" style="animation-delay:0.3s"><span class="sensor-icon">🌡</span><div class="sensor-label">Pressure</div><div class="sensor-value" id="disp-pressure">—</div><div class="sensor-unit">hPa</div><div class="sparkline"><canvas id="spark-pressure" width="200" height="24"></canvas></div></div>
+    <div class="sensor-card" style="animation-delay:0.4s"><span class="sensor-icon">🌡️</span><div class="sensor-label">Temperature</div><div class="sensor-value" id="disp-temp">—</div><div class="sensor-unit">°C</div><div class="feels-like" id="feelsLike">Feels Like: —</div><div class="sparkline"><canvas id="spark-temp" width="200" height="24"></canvas></div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-val" id="stat-total">0</div><div class="stat-label">Total Predictions</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-alerts" style="color:#ff9d00">0</div><div class="stat-label">Alerts Triggered</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-stage" style="color:#00ff9d">—</div><div class="stat-label">Current Stage</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-max" style="color:#ff2d55">—</div><div class="stat-label">Max Stage Today</div></div>
+    <div class="stat-card"><div class="stat-val" id="stat-uptime" style="color:#00c8ff">00:00</div><div class="stat-label">System Uptime</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:#aa88ff">95%</div><div class="stat-label">Model Accuracy</div></div>
+  </div>
+  <div class="main-grid">
+    <div class="panel">
+      <div class="panel-title">📡 Detection Result</div>
+      <div class="manual-section" id="manualSection">
+        <div class="input-grid">
+          <div class="input-group"><label>🌧 Rainfall</label><input type="number" id="inp-rainfall" placeholder="0–250" min="0" max="250" step="0.1"></div>
+          <div class="input-group"><label>💧 Humidity</label><input type="number" id="inp-humidity" placeholder="20–100" min="0" max="100" step="0.1"></div>
+          <div class="input-group"><label>🌡 Pressure</label><input type="number" id="inp-pressure" placeholder="960–1030" min="900" max="1100" step="0.1"></div>
+          <div class="input-group"><label>🌡️ Temperature</label><input type="number" id="inp-temp" placeholder="-10–45" min="-20" max="50" step="0.1"></div>
+        </div>
+        <button class="predict-btn" onclick="manualPredict()">⚡ PREDICT</button>
+      </div>
+      <div class="result-box" id="resultBox"><div style="color:rgba(200,230,255,0.2);font-size:11px;letter-spacing:2px;">AWAITING SENSOR DATA...</div></div>
+      <div class="timer-box"><div class="timer-label">⏱ Time Since Last Alert</div><div class="timer-val" id="timerVal">--:--:--</div><div class="timer-sub" id="timerSub">No alerts yet</div></div>
+      <div class="speed-wrap"><label>Speed</label><input type="range" id="speedSlider" min="500" max="5000" step="500" value="2000" oninput="updateSpeed(this.value)"><span class="speed-val" id="speedVal">2s</span></div>
+    </div>
+    <div class="panel"><div class="panel-title">🌩 15-Stage Indicator</div><div class="stages-container" id="stagesContainer"></div></div>
+    <div class="panel">
+      <div class="panel-title">📈 Real-time Trend</div>
+      <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      <div style="margin-top:10px;">
+        <div class="panel-title" style="margin-bottom:10px;">🗺️ Risk Zone Map</div>
+        <div class="risk-map"><canvas id="riskMap"></canvas></div>
+        <div class="map-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:#00ff9d"></div>Safe</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ff9d00"></div>Warning</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#ff2d55"></div>Danger</div>
+          <div class="legend-item"><div class="legend-dot" style="background:#00c8ff"></div>Station</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel"><div class="panel-title">📊 Prediction Log</div><div class="history-wrap"><div class="history-inner" id="historyInner"><div class="no-history" id="noHistory">No predictions yet</div></div></div></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE 2: AI MODEL ══ -->
+<div class="page" id="page1">
+<div class="p2-wrapper">
+  <div class="p2-title">🧠 AI MODEL WORKING</div>
+  <div class="p2-subtitle">Live inference from real sensor stream and Random Forest classification</div>
+
+  <div class="p2-current">
+    <div class="p2-current-stage" id="p2StageNum">MODEL STATUS — WAITING DATA</div>
+    <span class="p2-current-emoji" id="p2Emoji">🌤</span>
+    <div class="p2-current-name" id="p2StageName" style="color:#00ff9d">AWAITING DATA...</div>
+    <div class="p2-current-desc" id="p2StageDesc">Waiting for real sensor readings from ESP32/web input</div>
+    <div class="ai-model-grid">
+      <div class="ai-cell"><div class="ai-k">Algorithm</div><div class="ai-v" id="aiAlgorithmName">RandomForestClassifier</div></div>
+      <div class="ai-cell"><div class="ai-k">Model Runtime</div><div class="ai-v" id="aiModelRuntime">IDLE</div></div>
+      <div class="ai-cell"><div class="ai-k">Rainfall Input</div><div class="ai-v" id="aiRainIn">-- mm/hr</div></div>
+      <div class="ai-cell"><div class="ai-k">Humidity Input</div><div class="ai-v" id="aiHumidityIn">-- %</div></div>
+      <div class="ai-cell"><div class="ai-k">Pressure Input</div><div class="ai-v" id="aiPressureIn">-- hPa</div></div>
+      <div class="ai-cell"><div class="ai-k">Temperature Input</div><div class="ai-v" id="aiTempIn">-- °C</div></div>
+      <div class="ai-cell"><div class="ai-k">Predicted Stage</div><div class="ai-v" id="aiPredStage">--</div></div>
+      <div class="ai-cell"><div class="ai-k">Alert Level</div><div class="ai-v" id="aiAlertLevel">--</div></div>
+      <div class="ai-cell"><div class="ai-k">Last Inference</div><div class="ai-v" id="aiLastInference">--</div></div>
+    </div>
+  </div>
+
+  <!-- 5 Street Lights -->
+  <div class="streetlight-section">
+    <div class="five-lights-row" id="fiveLightsRow">
+      <!-- JS will generate 5 poles -->
+    </div>
+  </div>
+
+  <!-- Stage line -->
+  <div class="stage-line-wrap">
+    <div class="stage-line" id="stageLine"></div>
+  </div>
+
+  <div class="p2-legend">
+    <div class="p2-legend-item"><div class="p2-legend-dot" style="background:#e0eeff;box-shadow:0 0 8px rgba(200,220,255,0.6)"></div>Stage 0–7: Safe (White)</div>
+    <div class="p2-legend-item"><div class="p2-legend-dot" style="background:#ffcc00;box-shadow:0 0 8px rgba(255,200,0,0.6)"></div>Stage 8–13: Warning (Yellow)</div>
+    <div class="p2-legend-item"><div class="p2-legend-dot" style="background:#ff2d55;box-shadow:0 0 8px rgba(255,45,85,0.6)"></div>Stage 14: Danger (Red)</div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE 3: CONTROL PANEL ══ -->
+<div class="page" id="page2">
+<div class="p2-wrapper">
+  <div class="p2-title">🎛 CONTROL PANEL</div>
+  <div class="p2-subtitle">Relay operations, emergency actions, ESP32 connectivity, and live hardware status</div>
+
+  <div class="sim-controls">
+    <div class="sim-status" id="simStatus">LIVE SENSOR MODE</div>
+    <div class="relay-live" id="relayStatus1">Relay 1: OFF</div>
+    <div class="relay-live" id="relayStatus2">Relay 2: OFF</div>
+    <div class="relay-live" id="relayStatus3">Relay 3: OFF</div>
+    <div class="relay-live" id="esp32Status" style="color:#ff2d55;">ESP32: OFFLINE</div>
+    <div class="relay-live" id="esp32LastSeen">Last seen: Never</div>
+  </div>
+
+  <div class="control-section">
+    <div class="relay-title">CONTROL PANEL</div>
+    <button class="sim-btn sim-btn-manual" onclick="toggleManual()">✏️ MANUAL</button>
+    <button class="sim-btn sim-btn-export" onclick="exportCSV()">⬇ EXPORT CSV</button>
+    <button class="sim-btn sim-btn-emergency" onclick="triggerEmergencyPing()">🚨 EMERGENCY PING</button>
+  </div>
+
+  <div class="relay-controls">
+    <div class="relay-title">RELAY CONTROL</div>
+    <button class="relay-btn" id="relay1Btn" onclick="toggleRelay(1)">Relay 1: OFF</button>
+    <button class="relay-btn" id="relay2Btn" onclick="toggleRelay(2)">Relay 2: OFF</button>
+    <button class="relay-btn" id="relay3Btn" onclick="toggleRelay(3)">Relay 3: OFF</button>
+    <button class="relay-btn alloff" onclick="setAllRelaysOff()">All OFF</button>
+  </div>
+
+  <div style="display:none;">
+    <div id="smsTime">No message yet</div>
+    <div id="smsBubbleWrap"></div>
+    <div id="smsLogList"></div>
+  </div>
+</div>
+</div>
+
+<!-- ══ PAGE 4: SENSOR STATUS ══ -->
+<div class="page" id="page3">
+<div class="p4-wrapper">
+  <div class="p4-title">📡 SENSOR STATUS</div>
+  <div class="p4-subtitle">Real-time health monitoring of all IoT sensors</div>
+
+  <div class="sensor-grid">
+    <!-- FC-37 Rain Sensor -->
+    <div class="sensor-status-card online" id="ss-rain">
+      <div class="ss-header">
+        <div class="ss-name">🌧 FC-37 Rain Sensor</div>
+        <div class="ss-badge online" id="ss-rain-badge">● ONLINE</div>
+      </div>
+      <span class="ss-icon">🌧</span>
+      <div class="ss-value" id="ss-rain-val" style="color:#00c8ff">—</div>
+      <div class="ss-unit">mm / hr</div>
+      <div class="ss-bar-wrap"><div class="ss-bar" id="ss-rain-bar" style="background:#00c8ff;width:0%"></div></div>
+      <div class="ss-meta">
+        <div class="ss-meta-item"><div class="ss-meta-label">Last Reading</div><div class="ss-meta-val" id="ss-rain-last">—</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Status</div><div class="ss-meta-val" style="color:#00ff9d">Active</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Pin</div><div class="ss-meta-val">A0 (Analog)</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Signal</div><div class="ss-signal" id="ss-rain-signal"></div></div>
+      </div>
+    </div>
+
+    <!-- DHT22 Humidity + Temp -->
+    <div class="sensor-status-card online" id="ss-dht">
+      <div class="ss-header">
+        <div class="ss-name">💧 DHT22 Humidity + Temp</div>
+        <div class="ss-badge online" id="ss-dht-badge">● ONLINE</div>
+      </div>
+      <span class="ss-icon">💧</span>
+      <div class="ss-value" id="ss-dht-val" style="color:#00ff9d">—</div>
+      <div class="ss-unit">% Humidity &nbsp;|&nbsp; °C Temp</div>
+      <div class="ss-bar-wrap"><div class="ss-bar" id="ss-dht-bar" style="background:#00ff9d;width:0%"></div></div>
+      <div class="ss-meta">
+        <div class="ss-meta-item"><div class="ss-meta-label">Humidity</div><div class="ss-meta-val" id="ss-dht-h">—</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Temperature</div><div class="ss-meta-val" id="ss-dht-t">—</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Pin</div><div class="ss-meta-val">D2 (Digital)</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Signal</div><div class="ss-signal" id="ss-dht-signal"></div></div>
+      </div>
+    </div>
+
+    <!-- BMP280 Pressure -->
+    <div class="sensor-status-card online" id="ss-bmp">
+      <div class="ss-header">
+        <div class="ss-name">🌡 BMP280 Pressure</div>
+        <div class="ss-badge online" id="ss-bmp-badge">● ONLINE</div>
+      </div>
+      <span class="ss-icon">🌡</span>
+      <div class="ss-value" id="ss-bmp-val" style="color:#ff9d00">—</div>
+      <div class="ss-unit">hPa</div>
+      <div class="ss-bar-wrap"><div class="ss-bar" id="ss-bmp-bar" style="background:#ff9d00;width:0%"></div></div>
+      <div class="ss-meta">
+        <div class="ss-meta-item"><div class="ss-meta-label">Last Reading</div><div class="ss-meta-val" id="ss-bmp-last">—</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Status</div><div class="ss-meta-val" style="color:#00ff9d">Active</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Protocol</div><div class="ss-meta-val">I2C (SDA/SCL)</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Signal</div><div class="ss-signal" id="ss-bmp-signal"></div></div>
+      </div>
+    </div>
+
+    <!-- Arduino Uno -->
+    <div class="sensor-status-card online" id="ss-ard">
+      <div class="ss-header">
+        <div class="ss-name">⚙️ Arduino Uno (MCU)</div>
+        <div class="ss-badge online" id="ss-ard-badge">● ONLINE</div>
+      </div>
+      <span class="ss-icon">⚙️</span>
+      <div class="ss-value" style="color:#aa88ff" id="ss-ard-val">RUNNING</div>
+      <div class="ss-unit">Microcontroller Unit</div>
+      <div class="ss-bar-wrap"><div class="ss-bar" id="ss-ard-bar" style="background:#aa88ff;width:95%"></div></div>
+      <div class="ss-meta">
+        <div class="ss-meta-item"><div class="ss-meta-label">Uptime</div><div class="ss-meta-val" id="ss-ard-uptime">00:00</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Loop/sec</div><div class="ss-meta-val" id="ss-ard-loop">—</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Voltage</div><div class="ss-meta-val">5.0V</div></div>
+        <div class="ss-meta-item"><div class="ss-meta-label">Signal</div><div class="ss-signal" id="ss-ard-signal"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- System Health -->
+  <div class="system-health">
+    <div class="panel-title">🏥 System Health Overview</div>
+    <div class="health-grid">
+      <div class="health-item"><div class="health-val" id="h-sensors">4/4</div><div class="health-label">Sensors Online</div></div>
+      <div class="health-item"><div class="health-val" id="h-uptime">00:00</div><div class="health-label">System Uptime</div></div>
+      <div class="health-item"><div class="health-val" id="h-readings">0</div><div class="health-label">Total Readings</div></div>
+      <div class="health-item"><div class="health-val" style="color:#00ff9d">95%</div><div class="health-label">ML Accuracy</div></div>
+    </div>
+  </div>
+
+  <!-- Latest Readings Table -->
+  <div class="panel" style="margin-top:14px; background:rgba(5,20,40,0.9); border:1px solid var(--border); border-radius:12px; padding:14px;">
+    <div class="panel-title">📈 Latest Sensor Readings</div>
+    <div style="overflow-x:auto; max-height:220px;">
+      <table id="readingsTable" style="width:100%; border-collapse:collapse; color:#cce8ff; font-size:12px;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left; padding:6px 8px;">#</th>
+            <th style="text-align:left; padding:6px 8px;">Timestamp</th>
+            <th style="text-align:left; padding:6px 8px;">Rain</th>
+            <th style="text-align:left; padding:6px 8px;">Humidity</th>
+            <th style="text-align:left; padding:6px 8px;">Pressure</th>
+            <th style="text-align:left; padding:6px 8px;">Temp</th>
+            <th style="text-align:left; padding:6px 8px;">Stage</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="manual-test-panel" style="margin:12px 16px; background:rgba(0,0,0,0.4); padding:10px; border:1px solid var(--border); border-radius:10px;">
+    <div style="font-size:12px; color:#00ff9d; margin-bottom:6px;">🧪 Manual Hardware Simulation</div>
+    <button onclick="sendSample(5, 60, 1015, 24)" style="margin-right:6px;">Normal</button>
+    <button onclick="sendSample(120, 80, 1008, 28)" style="margin-right:6px;">Heavy</button>
+    <button onclick="sendSample(280, 95, 995, 32)">Cloudburst</button>
+  </div>
+</div>
+</div>
+
+<script>
+  window.onload = () => {
+    // Load readings data
+    fetch("http://localhost:5000/api/readings")
+    .then(res => res.json())
+    .then(data => {
+        console.log('Readings from API:', data); // check JSON
+        const total = Array.isArray(data) ? data.length : 0;
+        document.getElementById('h-readings').innerText = total;
+
+        if (total > 0) {
+          const latest = data[0];
+          // Update main display with latest data
+          updateUI(latest.rain_intensity || latest.rain || 0, latest.humidity || 0, latest.pressure || 0, latest.temperature || 0);
+          
+          // if this id exists, set it; otherwise ignore gracefully
+          const rainLevelEl = document.getElementById('rainLevel');
+          if (rainLevelEl) rainLevelEl.innerText = latest.rain_intensity;
+
+          const humidityEl = document.getElementById('humLevel');
+          if (humidityEl) humidityEl.innerText = latest.humidity;
+
+          const pressureEl = document.getElementById('presLevel');
+          if (pressureEl) pressureEl.innerText = latest.pressure;
+
+          const tempEl = document.getElementById('tempLevel');
+          if (tempEl) tempEl.innerText = latest.temperature;
+
+          // Fill readings table
+          const tbody = document.querySelector('#readingsTable tbody');
+          if (tbody) {
+            tbody.innerHTML = '';
+            data.slice(0, 10).forEach((row, idx) => {
+              const tr = document.createElement('tr');
+              tr.style.borderBottom = '1px solid rgba(255,255,255,0.1)';
+              tr.innerHTML = `
+                <td style="padding:6px 8px;">${idx+1}</td>
+                <td style="padding:6px 8px;">${row.timestamp || '—'}</td>
+                <td style="padding:6px 8px;">${row.rain_intensity || row.rain || '—'}</td>
+                <td style="padding:6px 8px;">${row.humidity || '—'}</td>
+                <td style="padding:6px 8px;">${row.pressure || '—'}</td>
+                <td style="padding:6px 8px;">${row.temperature || '—'}</td>
+                <td style="padding:6px 8px;">${row.stage || '—'}</td>
+              `;
+              tbody.appendChild(tr);
+            });
+          }
+        }
+    })
+    .catch(err => {
+        console.error('Failed to load readings:', err);
+        document.getElementById('h-readings').innerText = 'N/A';
+    });
+
+    // Poll ESP32 status continuously
+    pollEsp32Status();
+    setInterval(pollEsp32Status, 3000);
+
+    // Poll relay command state continuously
+    fetchRelayState();
+    setInterval(fetchRelayState, 2500);
+  };
+const rc = document.getElementById('rainContainer');
+for(let i=0;i<55;i++){const d=document.createElement('div');d.className='raindrop';d.style.cssText=`left:${Math.random()*100}vw;height:${25+Math.random()*55}px;animation-duration:${0.6+Math.random()*1.4}s;animation-delay:${Math.random()*2}s;opacity:${0.07+Math.random()*0.18}`;rc.appendChild(d);}
+
+// Stages
+const stages=[
+  {name:"Clear Weather",    emoji:"☀️",color:"#00ff9d",r:[0,5],   h:[20,40], p:[1015,1030],t:[20,40],desc:"No rainfall. Clear sky conditions."},
+  {name:"Cloud Formation",  emoji:"🌤",color:"#00e5b0",r:[0,8],   h:[40,55], p:[1008,1015],t:[18,35],desc:"Clouds forming. Monitor conditions."},
+  {name:"High Humidity",    emoji:"💧",color:"#00cccc",r:[2,12],  h:[55,65], p:[1005,1012],t:[16,30],desc:"Humidity rising. Possible rain ahead."},
+  {name:"Light Rain",       emoji:"🌦",color:"#00b3e6",r:[5,20],  h:[60,70], p:[1002,1008],t:[15,28],desc:"Light rainfall. Roads may be slippery."},
+  {name:"Moderate Rain",    emoji:"🌧",color:"#009aff",r:[15,35], h:[65,73], p:[1000,1005],t:[14,26],desc:"Moderate rainfall. Visibility reducing."},
+  {name:"Heavy Rain Start", emoji:"🌧",color:"#0077ff",r:[30,50], h:[70,76], p:[997,1002], t:[13,24],desc:"Heavy rain beginning. Stay indoors."},
+  {name:"Heavy Rain",       emoji:"🌧",color:"#5555ff",r:[45,65], h:[74,78], p:[995,999],  t:[12,22],desc:"Heavy rainfall. Avoid hill slopes."},
+  {name:"Very Heavy Rain",  emoji:"🌨",color:"#8833ff",r:[60,80], h:[76,80], p:[993,997],  t:[11,20],desc:"Very heavy rain. Flash flood risk."},
+  {name:"Intense Rainfall", emoji:"⛈",color:"#aa22dd",r:[75,95], h:[78,82], p:[991,995],  t:[10,18],desc:"Intense rainfall. High flash flood risk."},
+  {name:"Extreme Rain",     emoji:"⛈",color:"#cc11bb",r:[88,105],h:[80,84], p:[989,993],  t:[9,17], desc:"Extreme rain. Evacuate low-lying areas."},
+  {name:"Critical Rainfall",emoji:"🚨",color:"#ee0099",r:[100,120],h:[82,86],p:[987,991],  t:[8,16], desc:"Critical rainfall. Evacuate immediately."},
+  {name:"Severe Rainfall",  emoji:"🚨",color:"#ff2266",r:[115,140],h:[84,88],p:[985,989],  t:[7,15], desc:"Severe rainfall. All roads dangerous."},
+  {name:"Extreme Weather",  emoji:"🚨",color:"#ff4400",r:[135,160],h:[86,90],p:[983,987],  t:[6,14], desc:"Extreme weather. Do not move outside."},
+  {name:"Near Cloudburst",  emoji:"⚠️",color:"#ff7700",r:[155,185],h:[88,94],p:[975,984],  t:[5,13], desc:"Near cloudburst! Emergency evacuation!"},
+  {name:"Cloudburst Stage", emoji:"🔴",color:"#ff0000",r:[180,250],h:[92,100],p:[960,976], t:[4,12], desc:"CLOUDBURST! Massive flash flood imminent!"},
+];
+
+// Build stage rows (Page 1)
+const stagesCont=document.getElementById('stagesContainer');
+stages.forEach((s,i)=>{
+  const row=document.createElement('div');row.className='stage-row';row.id='stage-'+i;
+  row.innerHTML=`<div class="stage-num">${i}</div><div class="stage-dot" id="dot-${i}" style="color:${s.color}"></div><div class="stage-bar-wrap"><div class="stage-bar" id="bar-${i}" style="background:${s.color};width:0%"></div></div><div class="stage-name">${s.emoji} ${s.name}</div>`;
+  stagesCont.appendChild(row);
+});
+setTimeout(()=>stages.forEach((_,i)=>{ document.getElementById('bar-'+i).style.width=((i+1)/stages.length*100)+'%'; }),400);
+
+// Build stage line (Page 2)
+const stageLine=document.getElementById('stageLine');
+stages.forEach((s,i)=>{
+  const zone=i<=7?'white-zone':i<=13?'yellow-zone':'red-zone';
+  const pill=document.createElement('div');
+  pill.className=`stage-pill ${zone}`;pill.id='pill-'+i;
+  const numColor=i<=7?'rgba(200,220,255,0.8)':i<=13?'#ffcc00':'#ff4455';
+  pill.innerHTML=`<div class="stage-pill-num" style="color:${numColor}">${i}</div><div class="stage-pill-emoji">${s.emoji}</div><div class="stage-pill-name" style="color:rgba(200,230,255,0.5)">${s.name}</div>`;
+  stageLine.appendChild(pill);
+  if(i<14){
+    const conn=document.createElement('div');
+    conn.className='connector';
+    const connColor=i<7?'rgba(200,220,255,0.2)':i<13?'rgba(255,200,0,0.2)':'rgba(255,50,50,0.2)';
+    conn.style.background=connColor;
+    stageLine.appendChild(conn);
+  }
+});
+
+// Signal bars builder
+function buildSignal(id,strength){
+  const el=document.getElementById(id);if(!el)return;
+  el.innerHTML='';
+  for(let i=0;i<4;i++){
+    const bar=document.createElement('div');
+    bar.className='ss-signal-bar';
+    bar.style.height=(4+i*3)+'px';
+    bar.style.background=i<strength?'rgba(0,255,157,0.8)':'rgba(255,255,255,0.1)';
+    el.appendChild(bar);
+  }
+}
+['rain','dht','bmp','ard'].forEach(id=>buildSignal('ss-'+id+'-signal',4));
+
+// Sparklines
+const spk={rainfall:[],humidity:[],pressure:[],temp:[]};const MAX_S=22;
+function drawSpk(id,data,color){
+  const c=document.getElementById(id);if(!c)return;
+  const ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);if(data.length<2)return;
+  const mn=Math.min(...data),mx=Math.max(...data),rng=mx-mn||1;
+  ctx.beginPath();ctx.strokeStyle=color;ctx.lineWidth=1.5;ctx.shadowColor=color;ctx.shadowBlur=4;
+  data.forEach((v,i)=>{const x=i/(data.length-1)*w,y=h-((v-mn)/rng)*(h-4)-2;i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);});
+  ctx.stroke();
+}
+
+// Trend chart
+const trendCanvas=document.getElementById('trendChart');
+const trendCtx=trendCanvas.getContext('2d');
+const trendData={rainfall:[],stage:[]};const MAX_T=20;
+function drawTrend(){
+  const w=trendCanvas.offsetWidth||300,h=140;trendCanvas.width=w;trendCanvas.height=h;
+  trendCtx.clearRect(0,0,w,h);if(trendData.rainfall.length<2)return;
+  trendCtx.strokeStyle='rgba(0,200,255,0.08)';trendCtx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=h/4*i;trendCtx.beginPath();trendCtx.moveTo(0,y);trendCtx.lineTo(w,y);trendCtx.stroke();}
+  const mn=0,mx=250,rng=mx-mn;
+  trendCtx.beginPath();trendCtx.strokeStyle='#00c8ff';trendCtx.lineWidth=2;trendCtx.shadowColor='#00c8ff';trendCtx.shadowBlur=6;
+  trendData.rainfall.forEach((v,i)=>{const x=i/(trendData.rainfall.length-1)*w,y=h-((v-mn)/rng)*(h-8)-4;i===0?trendCtx.moveTo(x,y):trendCtx.lineTo(x,y);});trendCtx.stroke();
+  trendCtx.beginPath();trendCtx.strokeStyle='#ff9d00';trendCtx.lineWidth=1.5;trendCtx.shadowColor='#ff9d00';trendCtx.shadowBlur=4;
+  trendData.stage.forEach((v,i)=>{const x=i/(trendData.stage.length-1)*w,y=h-((v/14))*(h-8)-4;i===0?trendCtx.moveTo(x,y):trendCtx.lineTo(x,y);});trendCtx.stroke();
+  trendCtx.font='8px Orbitron,monospace';trendCtx.fillStyle='rgba(0,200,255,0.6)';trendCtx.fillText('RAINFALL',4,12);
+  trendCtx.fillStyle='rgba(255,157,0,0.6)';trendCtx.fillText('STAGE',70,12);
+}
+
+// Risk map
+const mapCanvas=document.getElementById('riskMap');const mapCtx=mapCanvas.getContext('2d');
+const hillPts=[{x:0.15,y:0.3,name:'Zone A'},{x:0.35,y:0.5,name:'Zone B'},{x:0.55,y:0.25,name:'Zone C'},{x:0.75,y:0.6,name:'Zone D'},{x:0.5,y:0.7,name:'Station',isStation:true}];
+function drawMap(si){
+  const w=mapCanvas.offsetWidth||300,h=mapCanvas.offsetHeight||160;mapCanvas.width=w;mapCanvas.height=h;
+  mapCtx.fillStyle='rgba(0,20,40,0.9)';mapCtx.fillRect(0,0,w,h);
+  [[0,h,0.2*w,0.4*h,0.35*w,h],[0.3*w,h,0.5*w,0.15*h,0.65*w,h],[0.6*w,h,0.8*w,0.35*h,w,h]].forEach(p=>{mapCtx.beginPath();mapCtx.moveTo(p[0],p[1]);mapCtx.lineTo(p[2],p[3]);mapCtx.lineTo(p[4],p[5]);mapCtx.closePath();mapCtx.fillStyle='rgba(0,60,40,0.4)';mapCtx.fill();});
+  mapCtx.strokeStyle='rgba(0,200,255,0.05)';mapCtx.lineWidth=1;
+  for(let i=0;i<w;i+=30){mapCtx.beginPath();mapCtx.moveTo(i,0);mapCtx.lineTo(i,h);mapCtx.stroke();}
+  for(let i=0;i<h;i+=30){mapCtx.beginPath();mapCtx.moveTo(0,i);mapCtx.lineTo(w,i);mapCtx.stroke();}
+  const gc=(i)=>i>=13?'rgba(255,45,85,0.35)':i>=9?'rgba(255,157,0,0.3)':i>=5?'rgba(255,200,0,0.2)':'rgba(0,255,157,0.15)';
+  const bc=(i)=>i>=13?'#ff2d55':i>=9?'#ff9d00':i>=5?'#ffcc00':'#00ff9d';
+  hillPts.forEach(pt=>{
+    const px=pt.x*w,py=pt.y*h,sp=si*2+15;
+    const g=mapCtx.createRadialGradient(px,py,0,px,py,sp);
+    if(pt.isStation){g.addColorStop(0,'rgba(0,200,255,0.6)');g.addColorStop(1,'rgba(0,200,255,0)');mapCtx.beginPath();mapCtx.arc(px,py,sp,0,Math.PI*2);mapCtx.fillStyle=g;mapCtx.fill();mapCtx.beginPath();mapCtx.arc(px,py,6,0,Math.PI*2);mapCtx.fillStyle='#00c8ff';mapCtx.fill();mapCtx.beginPath();mapCtx.arc(px,py,10,0,Math.PI*2);mapCtx.strokeStyle='rgba(0,200,255,0.5)';mapCtx.lineWidth=1.5;mapCtx.stroke();mapCtx.font='8px Orbitron,monospace';mapCtx.fillStyle='rgba(0,200,255,0.8)';mapCtx.fillText('SENSOR',px+8,py-5);}
+    else{const zv=Math.min(si+Math.floor(Math.random()*3),14);g.addColorStop(0,gc(zv));g.addColorStop(1,'rgba(0,0,0,0)');mapCtx.beginPath();mapCtx.arc(px,py,sp,0,Math.PI*2);mapCtx.fillStyle=g;mapCtx.fill();mapCtx.beginPath();mapCtx.arc(px,py,4,0,Math.PI*2);mapCtx.fillStyle=bc(zv);mapCtx.fill();mapCtx.font='7px Exo 2,sans-serif';mapCtx.fillStyle='rgba(200,230,255,0.5)';mapCtx.fillText(pt.name,px+6,py-3);}
+  });
+  mapCtx.font='9px Orbitron,monospace';mapCtx.fillStyle='rgba(0,200,255,0.4)';mapCtx.fillText('N',w-14,12);mapCtx.fillText('S',w-14,h-4);
+}
+
+// Classify
+function classify(r,h,p,t){let best=0,bs=Infinity;stages.forEach((s,i)=>{const rM=(s.r[0]+s.r[1])/2,hM=(s.h[0]+s.h[1])/2,pM=(s.p[0]+s.p[1])/2,tM=(s.t[0]+s.t[1])/2;const sc=Math.abs(r-rM)/250*0.4+Math.abs(h-hM)/100*0.25+Math.abs(p-pM)/100*0.25+Math.abs(t-tM)/50*0.1;if(sc<bs){bs=sc;best=i;}});return best;}
+function feelsLike(t,h){if(t>=27){const fl=-8.78+1.611*t+2.338*h-0.146*t*h-0.0123*t*t-0.0164*h*h;return fl.toFixed(1);}return(t-(0.4*(t-10)*(1-h/100))).toFixed(1);}
+function alertLevelFromStage(idx){if(idx>=14)return 'CRITICAL';if(idx>=12)return 'HIGH';if(idx>=9)return 'WARNING';if(idx>=5)return 'MODERATE';return 'NORMAL';}
+
+function updateAiWorkingPanel(r,h,p,t,idx,stageName,alertLevel){
+  const nowStr=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const runtimeEl=document.getElementById('aiModelRuntime');
+  if(runtimeEl){
+    runtimeEl.textContent='RUNNING (LIVE DATA)';
+    runtimeEl.style.color='#00ff9d';
+  }
+  const rainEl=document.getElementById('aiRainIn'); if(rainEl) rainEl.textContent=r.toFixed(2)+' mm/hr';
+  const humEl=document.getElementById('aiHumidityIn'); if(humEl) humEl.textContent=h.toFixed(2)+' %';
+  const pressureEl=document.getElementById('aiPressureIn'); if(pressureEl) pressureEl.textContent=p.toFixed(2)+' hPa';
+  const tempEl=document.getElementById('aiTempIn'); if(tempEl) tempEl.textContent=t.toFixed(2)+' °C';
+  const stageEl=document.getElementById('aiPredStage'); if(stageEl) stageEl.textContent='Stage '+idx+' - '+stageName;
+  const alertEl=document.getElementById('aiAlertLevel'); if(alertEl) alertEl.textContent=alertLevel;
+  const infEl=document.getElementById('aiLastInference'); if(infEl) infEl.textContent=nowStr;
+}
+
+// Stats
+let totalPreds=0,totalAlerts=0,maxStage=0,lastAlertTime=null;
+const startTime=Date.now();
+let audioCtx=null;
+let relayState={r1:0,r2:0,r3:0};
+
+function renderRelayButtons(){
+  [1,2,3].forEach(i=>{
+    const key='r'+i;
+    const btn=document.getElementById('relay'+i+'Btn');
+    if(!btn)return;
+    const on=Number(relayState[key])===1;
+    btn.textContent='Relay '+i+': '+(on?'ON':'OFF');
+    btn.classList.toggle('active',on);
+
+    const statusEl=document.getElementById('relayStatus'+i);
+    if(statusEl){
+      statusEl.textContent='Relay '+i+': '+(on?'ON':'OFF');
+      statusEl.classList.toggle('on',on);
+    }
+  });
+}
+
+function fetchRelayState(){
+  fetch('http://127.0.0.1:5000/api/device/commands/state')
+    .then(res=>res.json())
+    .then(js=>{
+      relayState={
+        r1:Number(js.r1 ?? 0),
+        r2:Number(js.r2 ?? 0),
+        r3:Number(js.r3 ?? 0)
+      };
+      renderRelayButtons();
+    })
+    .catch(()=>{});
+}
+
+function sendRelayState(nextState){
+  return fetch('http://127.0.0.1:5000/api/device/commands',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(nextState)
+  })
+    .then(res=>res.json())
+    .then(js=>{
+      if(js && js.relay){
+        relayState={
+          r1:Number(js.relay.r1 ?? 0),
+          r2:Number(js.relay.r2 ?? 0),
+          r3:Number(js.relay.r3 ?? 0)
+        };
+        renderRelayButtons();
+      }
+    });
+}
+
+function toggleRelay(index){
+  const key='r'+index;
+  const nextState={...relayState,[key]:Number(relayState[key])===1?0:1};
+  sendRelayState(nextState).catch(err=>console.error('Relay command failed',err));
+}
+
+function setAllRelaysOff(){
+  sendRelayState({r1:0,r2:0,r3:0}).catch(err=>console.error('Relay all-off failed',err));
+}
+
+function triggerEmergencyPing(){
+  const statusEl=document.getElementById('simStatus');
+  if(statusEl){
+    statusEl.textContent='EMERGENCY PING...';
+    statusEl.style.color='#ff9d00';
+  }
+
+  fetch('http://127.0.0.1:5000/api/emergency/ping',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source:'web'})
+  })
+    .then(res=>res.json())
+    .then(js=>{
+      const banner=document.getElementById('alertBanner');
+      if(js.status==='success'){
+        if(statusEl){
+          statusEl.textContent='EMERGENCY PING SENT';
+          statusEl.style.color='#ff2d55';
+        }
+        if(banner){
+          banner.textContent='🚨 Emergency ping sent from dashboard';
+          banner.className='alert-banner alert-danger';
+          banner.style.display='block';
+        }
+      }else{
+        if(statusEl){
+          statusEl.textContent='PING FAILED';
+          statusEl.style.color='#ff2d55';
+        }
+      }
+    })
+    .catch(err=>{
+      console.error('Emergency ping failed',err);
+      if(statusEl){
+        statusEl.textContent='PING FAILED';
+        statusEl.style.color='#ff2d55';
+      }
+    });
+}
+
+function setEsp32Status(connected, lastSeenSeconds){
+  const statusEl=document.getElementById('esp32Status');
+  const lastSeenEl=document.getElementById('esp32LastSeen');
+  const navStatusEl=document.getElementById('esp32NavStatus');
+  if(!statusEl||!lastSeenEl)return;
+
+  if(connected){
+    statusEl.textContent='ESP32: ONLINE';
+    statusEl.style.color='#00ff9d';
+    lastSeenEl.textContent='Last seen: just now';
+    if(navStatusEl){
+      navStatusEl.textContent='ESP32: ONLINE';
+      navStatusEl.style.color='#00ff9d';
+      navStatusEl.style.borderColor='rgba(0,255,157,0.45)';
+      navStatusEl.style.background='rgba(0,255,157,0.08)';
+    }
+    return;
+  }
+
+  statusEl.textContent='ESP32: OFFLINE';
+  statusEl.style.color='#ff2d55';
+  if(lastSeenSeconds===null||lastSeenSeconds===undefined){
+    lastSeenEl.textContent='Last seen: Never';
+  }else{
+    lastSeenEl.textContent='Last seen: '+lastSeenSeconds+'s ago';
+  }
+  if(navStatusEl){
+    navStatusEl.textContent='ESP32: OFFLINE';
+    navStatusEl.style.color='#ff9cae';
+    navStatusEl.style.borderColor='rgba(255,45,85,0.45)';
+    navStatusEl.style.background='rgba(255,45,85,0.08)';
+  }
+}
+
+function pollEsp32Status(){
+  fetch('http://127.0.0.1:5000/api/device/status')
+    .then(res=>res.json())
+    .then(js=>setEsp32Status(Boolean(js.connected),js.last_seen_seconds))
+    .catch(()=>setEsp32Status(false,null));
+}
+
+// Timer
+function updateTimer(){
+  const up=Math.floor((Date.now()-startTime)/1000);
+  const m=Math.floor(up/60).toString().padStart(2,'0'),s=(up%60).toString().padStart(2,'0');
+  const upStr=m+':'+s;
+  document.getElementById('stat-uptime').textContent=upStr;
+  document.getElementById('h-uptime').textContent=upStr;
+  document.getElementById('ss-ard-uptime').textContent=upStr;
+  document.getElementById('ss-ard-loop').textContent=Math.floor(50+Math.random()*10);
+  if(lastAlertTime){const diff=Math.floor((Date.now()-lastAlertTime)/1000);const h2=Math.floor(diff/3600).toString().padStart(2,'0'),m2=Math.floor((diff%3600)/60).toString().padStart(2,'0'),s2=(diff%60).toString().padStart(2,'0');document.getElementById('timerVal').textContent=h2+':'+m2+':'+s2;}
+  document.getElementById('localTime').textContent=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const bat=Math.max(20,82-Math.floor((Date.now()-startTime)/60000));
+  document.getElementById('batInner').style.width=bat+'%';document.getElementById('batPct').textContent=bat+'%';
+}
+setInterval(updateTimer,1000);
+
+// History
+const histInner=document.getElementById('historyInner');let allHistory=[];
+function addHist(idx,stage,r,h,p,t){
+  allHistory.unshift({time:new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),stage:idx,stageName:stage.name,r,h,p,t});
+  const noH=document.getElementById('noHistory');if(noH)noH.remove();
+  while(histInner.children.length>=35)histInner.removeChild(histInner.lastChild);
+  const item=document.createElement('div');item.className='history-item';
+  item.innerHTML=`<span class="history-time">${allHistory[0].time}</span><span style="font-size:12px">${stage.emoji}</span><span class="history-stage" style="color:${stage.color}">S${idx}—${stage.name}</span><span style="font-size:7px;color:rgba(200,230,255,0.25)">R:${r.toFixed(0)} H:${h.toFixed(0)}% P:${p.toFixed(0)}</span>`;
+  histInner.insertBefore(item,histInner.firstChild);
+}
+
+// SMS
+let smsLog=[];
+function sendSMS(idx,stage,r,h,p,t){
+  const time=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const date=new Date().toLocaleDateString('en-IN');
+  let msg='',msgClass='';
+  if(idx===14){msg=`🔴 CLOUDBURST ALERT!\n📍 Shimla Hill Slope, HP\n⛰️ Alt: 2206m\n\n🌧 Rainfall: ${r.toFixed(1)} mm/hr\n💧 Humidity: ${h.toFixed(1)}%\n🌡 Pressure: ${p.toFixed(1)} hPa\n🌡️ Temp: ${t.toFixed(1)}°C\n\n⚠️ Stage 14 — Cloudburst Stage\n🚨 EVACUATE IMMEDIATELY!\n📞 Call: 1077 (Disaster Helpline)\n\n🕐 ${time} | ${date}`;msgClass='danger';}
+  else if(idx>=12){msg=`⚠️ HIGH ALERT!\n📍 Shimla Hill Slope, HP\n\n🌧 Rainfall: ${r.toFixed(1)} mm/hr\n💧 Humidity: ${h.toFixed(1)}%\n🌡 Pressure: ${p.toFixed(1)} hPa\n🌡️ Temp: ${t.toFixed(1)}°C\n\n⛈ Stage ${idx} — ${stage.name}\n🏠 Stay indoors. Avoid hill slopes.\n\n🕐 ${time} | ${date}`;msgClass='warn';}
+  else if(idx>=9){msg=`🌧 WEATHER WARNING!\n📍 Shimla Hill Slope, HP\n\n🌧 Rainfall: ${r.toFixed(1)} mm/hr\n💧 Humidity: ${h.toFixed(1)}%\n🌡 Pressure: ${p.toFixed(1)} hPa\n\n🌧 Stage ${idx} — ${stage.name}\n⚠️ Heavy rainfall detected. Stay alert.\n\n🕐 ${time} | ${date}`;msgClass='warn';}
+  else return; // Only send SMS for stage 9+
+
+  // Update phone
+  document.getElementById('smsTime').textContent=time;
+  const wrap=document.getElementById('smsBubbleWrap');
+  wrap.innerHTML='';
+  const bubble=document.createElement('div');
+  bubble.className=`sms-bubble ${msgClass}`;
+  bubble.innerHTML=msg.split('\n').map(l=>`<div class="sms-line">${l}</div>`).join('');
+  wrap.appendChild(bubble);
+
+  // Add to log
+  smsLog.unshift({idx,stage,msg,time});
+  const list=document.getElementById('smsLogList');
+  const noSms=list.querySelector('.no-sms');if(noSms)noSms.remove();
+  while(list.children.length>=20)list.removeChild(list.lastChild);
+  const item=document.createElement('div');item.className='sms-log-item';
+  item.innerHTML=`<div class="sms-log-icon">${stage.emoji}</div><div class="sms-log-content"><div class="sms-log-stage" style="color:${stage.color}">Stage ${idx} — ${stage.name}</div><div class="sms-log-msg">${stage.desc}</div></div><div class="sms-log-time">${time}</div>`;
+  list.insertBefore(item,list.firstChild);
+}
+
+// Alert sound
+function playAlert(level){
+  try{if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const freqs=level>=14?[880,1100,880,1100]:level>=12?[660,880]:[440,550];
+    freqs.forEach((freq,i)=>{const osc=audioCtx.createOscillator(),gain=audioCtx.createGain();osc.connect(gain);gain.connect(audioCtx.destination);osc.frequency.value=freq;osc.type='sine';gain.gain.setValueAtTime(0,audioCtx.currentTime+i*0.2);gain.gain.linearRampToValueAtTime(0.15,audioCtx.currentTime+i*0.2+0.05);gain.gain.linearRampToValueAtTime(0,audioCtx.currentTime+i*0.2+0.2);osc.start(audioCtx.currentTime+i*0.2);osc.stop(audioCtx.currentTime+i*0.2+0.25);});
+  }catch(e){}
+}
+
+function exportCSV(){
+  if(allHistory.length===0){alert('No data to export!');return;}
+  const h='Time,Stage,Stage Name,Rainfall(mm/hr),Humidity(%),Pressure(hPa),Temperature(C)\n';
+  const r=allHistory.map(x=>`${x.time},${x.stage},${x.stageName},${x.r.toFixed(2)},${x.h.toFixed(2)},${x.p.toFixed(2)},${x.t.toFixed(2)}`).join('\n');
+  const blob=new Blob([h+r],{type:'text/csv'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='cloudburst_predictions.csv';a.click();URL.revokeObjectURL(url);
+}
+
+// ── Main Update ──
+function updateUI(r,h,p,t){
+  // Page 1 sensors
+  document.getElementById('disp-rainfall').textContent=r.toFixed(1);
+  document.getElementById('disp-humidity').textContent=h.toFixed(1);
+  document.getElementById('disp-pressure').textContent=p.toFixed(1);
+  document.getElementById('disp-temp').textContent=t.toFixed(1);
+  document.getElementById('feelsLike').textContent='Feels Like: '+feelsLike(t,h)+'°C';
+
+  spk.rainfall.push(r);if(spk.rainfall.length>MAX_S)spk.rainfall.shift();
+  spk.humidity.push(h);if(spk.humidity.length>MAX_S)spk.humidity.shift();
+  spk.pressure.push(p);if(spk.pressure.length>MAX_S)spk.pressure.shift();
+  spk.temp.push(t);if(spk.temp.length>MAX_S)spk.temp.shift();
+  drawSpk('spark-rainfall',spk.rainfall,'#00c8ff');drawSpk('spark-humidity',spk.humidity,'#00ff9d');
+  drawSpk('spark-pressure',spk.pressure,'#ff9d00');drawSpk('spark-temp',spk.temp,'#ff6688');
+
+  const idx=classify(r,h,p,t);const stage=stages[idx];
+  updateAiWorkingPanel(r,h,p,t,idx,stage.name,alertLevelFromStage(idx));
+
+  // Stage rows
+  document.querySelectorAll('.stage-row').forEach(el=>{el.classList.remove('active');const d=el.querySelector('.stage-dot');if(d){d.style.background='rgba(255,255,255,0.08)';d.style.boxShadow='none';}});
+  document.getElementById('stage-'+idx).classList.add('active');
+  const dot=document.getElementById('dot-'+idx);if(dot){dot.style.background=stage.color;dot.style.boxShadow=`0 0 7px ${stage.color}`;}
+
+  // Result
+  const box=document.getElementById('resultBox');
+  box.style.borderColor=stage.color+'44';box.style.background=stage.color+'08';
+  box.innerHTML=`<div class="result-emoji">${stage.emoji}</div><div class="result-stage-num">STAGE ${idx} DETECTED</div><div class="result-label" style="color:${stage.color}">${stage.name.toUpperCase()}</div><div class="result-meta">R: ${r.toFixed(1)} mm/hr<br>H: ${h.toFixed(1)}% &nbsp;|&nbsp; P: ${p.toFixed(1)} hPa<br>T: ${t.toFixed(1)}°C &nbsp;|&nbsp; FL: ${feelsLike(t,h)}°C</div>`;
+
+  // Alert banner
+  const banner=document.getElementById('alertBanner');
+  banner.style.display='none';banner.className='alert-banner';
+  if(idx===14){banner.textContent='🔴 CRITICAL ALERT — CLOUDBURST STAGE! EVACUATE IMMEDIATELY!';banner.classList.add('alert-danger');banner.style.display='block';playAlert(14);lastAlertTime=Date.now();document.getElementById('timerSub').textContent='Last: Stage '+idx;totalAlerts++;}
+  else if(idx>=12){banner.textContent='⚠️ HIGH ALERT — EXTREME WEATHER CONDITIONS!';banner.classList.add('alert-warn');banner.style.display='block';playAlert(12);lastAlertTime=Date.now();totalAlerts++;}
+  else if(idx>=9){banner.textContent='🌧 WARNING — HEAVY RAINFALL DETECTED!';banner.classList.add('alert-warn');banner.style.display='block';playAlert(9);lastAlertTime=Date.now();totalAlerts++;}
+
+  // Stats
+  totalPreds++;if(idx>maxStage)maxStage=idx;
+  document.getElementById('stat-total').textContent=totalPreds;
+  document.getElementById('stat-alerts').textContent=totalAlerts;
+  document.getElementById('stat-stage').textContent=idx;document.getElementById('stat-stage').style.color=stage.color;
+  document.getElementById('stat-max').textContent=maxStage;document.getElementById('stat-max').style.color=stages[maxStage].color;
+  document.getElementById('h-readings').textContent=totalPreds;
+
+  // Trend + map
+  trendData.rainfall.push(r);trendData.stage.push(idx);
+  if(trendData.rainfall.length>MAX_T){trendData.rainfall.shift();trendData.stage.shift();}
+  drawTrend();drawMap(idx);
+
+  // ── Page 2: 5 Street Lights — all same color ──
+  let bulbClass, labelColor, zoneText;
+  if(idx<=7){
+    bulbClass='sl-bulb on-white'; // White — steady, no blink
+    labelColor='#e0eeff';
+    zoneText='SAFE — NORMAL CONDITIONS';
+  } else if(idx<=13){
+    bulbClass='sl-bulb blink-yellow'; // Yellow — blink
+    labelColor='#ffcc00';
+    zoneText='WARNING — HEAVY RAIN ALERT';
+  } else {
+    bulbClass='sl-bulb blink-red'; // Red — fast blink
+    labelColor='#ff4455';
+    zoneText='DANGER — CLOUDBURST!';
+  }
+  for(let li=0;li<5;li++){
+    const bulb=document.getElementById('sl-bulb-'+li);
+    const label=document.getElementById('sl-label-'+li);
+    if(bulb) bulb.className=bulbClass;
+    if(label) label.style.color=labelColor;
+  }
+  document.getElementById('p2StageNum').textContent=`STAGE ${idx} — ${zoneText}`;
+  document.getElementById('p2StageNum').textContent=`STAGE ${idx} DETECTED`;
+  document.getElementById('p2Emoji').textContent=stage.emoji;
+  document.getElementById('p2StageName').textContent=stage.name.toUpperCase();
+  document.getElementById('p2StageName').style.color=stage.color;
+  document.getElementById('p2StageDesc').textContent=stage.desc;
+  // Stage pills
+  document.querySelectorAll('.stage-pill').forEach(el=>el.className=el.className.replace(/active-\w+/g,'').trim());
+  const pill=document.getElementById('pill-'+idx);
+  if(pill){const activeClass=idx<=7?'active-white':idx<=13?'active-yellow':'active-red';pill.classList.add(activeClass);}
+
+  // ── Page 3: SMS ──
+  sendSMS(idx,stage,r,h,p,t);
+
+  // ── Page 4: Sensor status ──
+  document.getElementById('ss-rain-val').textContent=r.toFixed(1);
+  document.getElementById('ss-rain-last').textContent=r.toFixed(1)+' mm/hr';
+  document.getElementById('ss-rain-bar').style.width=Math.min(r/250*100,100)+'%';
+  document.getElementById('ss-dht-val').textContent=h.toFixed(1)+'% / '+t.toFixed(1)+'°C';
+  document.getElementById('ss-dht-h').textContent=h.toFixed(1)+'%';
+  document.getElementById('ss-dht-t').textContent=t.toFixed(1)+'°C';
+  document.getElementById('ss-dht-bar').style.width=h+'%';
+  document.getElementById('ss-bmp-val').textContent=p.toFixed(1);
+  document.getElementById('ss-bmp-last').textContent=p.toFixed(1)+' hPa';
+  document.getElementById('ss-bmp-bar').style.width=Math.min((p-950)/100*100,100)+'%';
+
+  addHist(idx,stage,r,h,p,t);
+}
+
+// ── Simulation ──
+let simInterval=null,simStep=0,simSpeed=2000;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function getSimValues(){
+  const scenario='random';simStep++;
+  let si;
+  if(scenario==='escalate')    si=Math.min(Math.floor((simStep%32)/32*14),14);
+  else if(scenario==='deescalate') si=Math.max(14-Math.floor((simStep%32)/32*14),0);
+  else if(scenario==='cloudburst') si=13+Math.floor(Math.random()*2);
+  else if(scenario==='normal')     si=Math.floor(Math.random()*3);
+  else                             si=Math.floor(Math.random()*stages.length);
+  const s=stages[si];return[rnd(s.r[0],s.r[1]),rnd(s.h[0],s.h[1]),rnd(s.p[0],s.p[1]),rnd(s.t[0],s.t[1])];
+}
+function startSim(){
+  if(simInterval)clearInterval(simInterval);simStep=0;
+  document.getElementById('simStatus').textContent='SIMULATION';document.getElementById('simStatus').style.color='#ff9d00';
+  const run=()=>{const[r,h,p,t]=getSimValues();updateUI(r,h,p,t);};
+  run();simInterval=setInterval(run,simSpeed);
+}
+function stopSim(){
+  if(simInterval){clearInterval(simInterval);simInterval=null;}
+  document.getElementById('simStatus').textContent='LIVE SENSOR MODE';document.getElementById('simStatus').style.color='rgba(200,230,255,0.4)';
+}
+function updateSpeed(val){simSpeed=parseInt(val);document.getElementById('speedVal').textContent=(simSpeed/1000).toFixed(1)+'s';if(simInterval){stopSim();startSim();}}
+function toggleManual(){const ms=document.getElementById('manualSection');ms.classList.toggle('visible');document.getElementById('simStatus').textContent=ms.classList.contains('visible')?'MANUAL INPUT':'LIVE SENSOR MODE';}
+function manualPredict(){
+  const r=parseFloat(document.getElementById('inp-rainfall').value);
+  const h=parseFloat(document.getElementById('inp-humidity').value);
+  const p=parseFloat(document.getElementById('inp-pressure').value);
+  const t=parseFloat(document.getElementById('inp-temp').value);
+  if(isNaN(r)||isNaN(h)||isNaN(p)||isNaN(t)){document.getElementById('resultBox').innerHTML=`<div style="color:#ff2d55;font-family:'Orbitron',monospace;font-size:11px;">⚠ ENTER ALL VALUES</div>`;return;}
+  updateUI(r,h,p,t);
+}
+
+function sendSample(r,h,p,t){
+  console.log('🚀 Sending sample data:', {r,h,p,t});
+  
+  // Update UI immediately for testing
+  updateUI(r, h, p, t);
+  
+  // Get the stage for this data
+  const idx = classify(r, h, p, t);
+  const stage = stages[idx];
+  
+  // Force page 2 update with stage indicator
+  document.getElementById('p2StageNum').textContent = `STAGE ${idx} DETECTED`;
+  document.getElementById('p2StageName').textContent = stage.name.toUpperCase();
+  document.getElementById('p2Emoji').textContent = stage.emoji;
+  document.getElementById('p2StageName').style.color = stage.color;
+  document.getElementById('p2StageDesc').textContent = stage.desc;
+  
+  // Clear and populate trend data with progression
+  trendData.rainfall = [];
+  trendData.stage = [];
+  
+  // Add historical data points leading up to current stage
+  for(let i = 0; i < 15; i++) {
+    const progress = i / 15;
+    trendData.rainfall.push(r * progress);
+    trendData.stage.push(Math.floor(idx * progress));
+  }
+  
+  // Redraw charts with new data
+  setTimeout(() => {
+    drawTrend();
+    drawMap(idx);
+  }, 50);
+  
+  fetch('http://127.0.0.1:5000/data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({rain:r,humidity:h,pressure:p,temperature:t})})
+  .then(res=>res.json())
+  .then(js=>console.log('Manual send ok', js))
+  .catch(err=>console.error('Manual send fail', err));
+}
+
+document.querySelectorAll('input[type=number]').forEach(inp=>inp.addEventListener('keydown',e=>{if(e.key==='Enter')manualPredict();}));
+
+// Page navigation
+function showPage(n){
+  document.querySelectorAll('.page').forEach((p,i)=>{p.classList.toggle('active',i===n);});
+  document.querySelectorAll('.nav-btn').forEach((b,i)=>{b.classList.toggle('active',i===n);});
+}
+
+// Add event listeners for navigation buttons
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.nav-btn').forEach((btn, index) => {
+    btn.addEventListener('click', function() {
+      showPage(index);
+    });
+  });
+});
+
+// Build 5 Street Lights
+const lightConfigs=[
+  {label:'LIGHT 1'},{label:'LIGHT 2'},{label:'LIGHT 3'},{label:'LIGHT 4'},{label:'LIGHT 5'},
+];
+const row=document.getElementById('fiveLightsRow');
+if(row){
+  lightConfigs.forEach((lc,i)=>{
+    const wrap=document.createElement('div');wrap.className='street-light-wrap';
+    wrap.innerHTML=`
+      <div class="sl-head">
+        <div class="sl-bulb off" id="sl-bulb-${i}"></div>
+        <div class="sl-label" id="sl-label-${i}">${lc.label}</div>
+      </div>
+      <div class="sl-arm"></div>
+      <div class="sl-pole"></div>
+      <div class="sl-base"></div>
+    `;
+    row.appendChild(wrap);
+  });
+}
+window.addEventListener('resize',()=>{drawTrend();drawMap(0);});
+
+// ================= SOCKET.IO LIVE DATA =================
+console.log('Initializing Socket.IO connection...');
+const socket = io();
+
+socket.on('connect', () => {
+  console.log('✅ Connected to server successfully!');
+  console.log('Socket ID:', socket.id);
+  const runtimeEl=document.getElementById('aiModelRuntime');
+  if(runtimeEl){
+    runtimeEl.textContent='CONNECTED (WAITING INFERENCE)';
+    runtimeEl.style.color='#ffcc00';
+  }
+});
+
+socket.on('disconnect', () => {
+  console.log('❌ Disconnected from server');
+  const runtimeEl=document.getElementById('aiModelRuntime');
+  if(runtimeEl){
+    runtimeEl.textContent='DISCONNECTED';
+    runtimeEl.style.color='#ff2d55';
+  }
+});
+
+socket.on('connect_error', (error) => {
+  console.log('❌ Connection error:', error);
+});
+
+socket.on('relay_state', function(data){
+  relayState={
+    r1:Number(data.r1 ?? 0),
+    r2:Number(data.r2 ?? 0),
+    r3:Number(data.r3 ?? 0)
+  };
+  renderRelayButtons();
+});
+
+socket.on('emergency_ping', function(data){
+  const banner=document.getElementById('alertBanner');
+  if(!banner)return;
+  if(data.status==='success'){
+    banner.textContent='🚨 Emergency ping acknowledged';
+    banner.className='alert-banner alert-danger';
+    banner.style.display='block';
+  }else{
+    banner.textContent='⚠ Emergency ping failed';
+    banner.className='alert-banner alert-warn';
+    banner.style.display='block';
+  }
+});
+
+socket.on('update', function(data) {
+  console.log('📡 Received data from server:', data);
+  const rainVal = Number(data.rainfall ?? data.rain ?? data.rain_intensity ?? 0);
+  const humidityVal = Number(data.humidity ?? 0);
+  const pressureVal = Number(data.pressure ?? 0);
+  const tempVal = Number(data.temperature ?? data.temp ?? 0);
+  updateUI(rainVal, humidityVal, pressureVal, tempVal);
+
+  if(data.relay1 !== undefined || data.relay2 !== undefined || data.relay3 !== undefined){
+    relayState={
+      r1:Number(data.relay1 ?? relayState.r1 ?? 0),
+      r2:Number(data.relay2 ?? relayState.r2 ?? 0),
+      r3:Number(data.relay3 ?? relayState.r3 ?? 0)
+    };
+    renderRelayButtons();
+  }
+
+  if(data.device_source === 'esp32'){
+    setEsp32Status(true, 0);
+  }
+
+  if(data.algorithm_name){
+    const algEl=document.getElementById('aiAlgorithmName');
+    if(algEl) algEl.textContent=data.algorithm_name;
+  }
+  
+  // Update stage if available
+  if(data.stage !== undefined) {
+    console.log('🎯 Updating stage to:', data.stage, data.stage_name);
+    // Update current stage display
+    document.getElementById('stat-stage').textContent = data.stage;
+    document.getElementById('p2StageNum').textContent = `MODEL STATUS — STAGE ${data.stage} DETECTED`;
+    document.getElementById('p2StageName').textContent = data.stage_name.toUpperCase();
+    document.getElementById('p2StageDesc').textContent = `Rainfall: ${rainVal.toFixed(1)} mm/hr`;
+    
+    // Set color based on alert level
+    const color = data.alert_level === 'CRITICAL' ? '#ff2d55' : 
+                  data.alert_level === 'HIGH' ? '#ff9d00' : 
+                  data.alert_level === 'WARNING' ? '#ffcc00' : '#00ff9d';
+    
+    document.getElementById('stat-stage').style.color = color;
+    document.getElementById('p2StageName').style.color = color;
+    
+    // Update stage indicator
+    updateStageIndicator(data.stage);
+  }
+});
+
+function updateStageIndicator(stageNum) {
+  // Reset all dots
+  for(let i = 0; i < 15; i++) {
+    const dot = document.getElementById('dot-' + i);
+    if(dot) {
+      dot.style.opacity = i <= stageNum ? '1' : '0.3';
+    }
+  }
+  
+  // Update stage line position
+  const stageLine = document.getElementById('stageLine');
+  if(stageLine) {
+    const percentage = (stageNum / 14) * 100;
+    stageLine.style.left = percentage + '%';
+  }
+}
+</script>
+</body>
+</html>
